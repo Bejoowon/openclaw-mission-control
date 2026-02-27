@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { NextResponse } from "next/server";
+import { isValidCrewPin, readCrewPinFromRequest } from "../_auth";
 
 function logPath() {
   return path.join(os.homedir(), ".openclaw", "dashboard", "crew-chat-log.jsonl");
@@ -17,8 +18,12 @@ async function ensureFile(file: string) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const pin = readCrewPinFromRequest(req);
+    if (!isValidCrewPin(pin)) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
     const file = logPath();
     await ensureFile(file);
     const raw = await fs.readFile(file, "utf8");

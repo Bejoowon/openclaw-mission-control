@@ -27,22 +27,39 @@ export default function CrewChatPage() {
   const [target, setTarget] = useState<string>("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pin, setPin] = useState("");
+  const [unlocked, setUnlocked] = useState(false);
 
   const load = async () => {
-    const [s, m] = await Promise.all([
+    const headers: HeadersInit = pin ? { "x-crew-pin": pin } : {};
+    const [s, mRes] = await Promise.all([
       fetch("/api/crew-snapshot", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/crew-chat/messages", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/crew-chat/messages", { cache: "no-store", headers }),
     ]);
+
+    if (mRes.status === 401) {
+      setUnlocked(false);
+      setSnapshot(s);
+      return;
+    }
+
+    const m = await mRes.json();
     setSnapshot(s);
     setMessages(m.messages ?? []);
+    setUnlocked(true);
     if (!target && s?.agents?.[0]?.id) setTarget(s.agents[0].id);
   };
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("crew_chat_pin") || "";
+    if (saved) setPin(saved);
+  }, []);
 
   useEffect(() => {
     load();
     const timer = setInterval(load, 3000);
     return () => clearInterval(timer);
-  }, []);
+  }, [pin]);
 
   const filtered = useMemo(() => {
     if (mode === "group") return messages.filter((m) => m.room === "crew");
@@ -54,7 +71,10 @@ export default function CrewChatPage() {
     setBusy(true);
     await fetch("/api/crew-chat/send", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(pin ? { "x-crew-pin": pin } : {}),
+      },
       body: JSON.stringify(
         mode === "group"
           ? { mode: "group", from: "주원", text }
@@ -104,6 +124,30 @@ export default function CrewChatPage() {
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          {!unlocked ? (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm text-amber-800">Crew Chat 잠금됨 · 6자리 PIN을 입력해줘</p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6자리 PIN"
+                  className="w-40 rounded-md border border-amber-300 bg-white px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={() => {
+                    window.localStorage.setItem("crew_chat_pin", pin);
+                    document.cookie = `crew_chat_pin=${encodeURIComponent(pin)}; path=/`;
+                    load();
+                  }}
+                  className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white"
+                >
+                  잠금해제
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="max-h-[480px] space-y-3 overflow-y-auto pr-1">
             {filtered.map((m) => (
               <div key={m.id} className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${m.from === "주원" ? "ml-auto bg-blue-600 text-white" : "bg-slate-100 text-slate-800"}`}>
@@ -125,7 +169,7 @@ export default function CrewChatPage() {
             />
             <button
               onClick={send}
-              disabled={busy}
+              disabled={busy || !unlocked}
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
               {busy ? "전송중..." : "전송"}

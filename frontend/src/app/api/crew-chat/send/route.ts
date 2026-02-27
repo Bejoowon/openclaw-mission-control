@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { NextResponse } from "next/server";
+import { isValidCrewPin, readCrewPinFromRequest } from "../_auth";
 
 const execFileAsync = promisify(execFile);
 
@@ -90,6 +91,11 @@ async function askAgent(agentId: string, message: string) {
 
 export async function POST(req: Request) {
   try {
+    const pin = readCrewPinFromRequest(req);
+    if (!isValidCrewPin(pin)) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = (await req.json()) as SendBody;
     const from = body.from || "user";
     const mode = body.mode || "group";
