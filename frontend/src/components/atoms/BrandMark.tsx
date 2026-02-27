@@ -6,10 +6,10 @@ export function BrandMark() {
       </div>
       <div className="leading-tight">
         <div className="font-heading text-sm uppercase tracking-[0.2em] text-strong">
-          BANG'S TRIO
+          BANG'S CREW
         </div>
         <div className="text-[11px] font-medium text-quiet">
-          Family Mission Control
+          Adaptive Mission Control
         </div>
       </div>
     </div>

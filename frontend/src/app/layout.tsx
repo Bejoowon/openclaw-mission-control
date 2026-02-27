@@ -10,8 +10,8 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { GlobalLoader } from "@/components/ui/global-loader";
 
 export const metadata: Metadata = {
-  title: "Bangs Trio Mission Control",
-  description: "방울이·이슬이·리니 운영을 한눈에 보는 패밀리 커맨드 센터.",
+  title: "Bang's Crew Mission Control",
+  description: "에이전트 팀 운영을 한눈에 보는 확장형 커맨드 센터.",
 };
 
 const bodyFont = IBM_Plex_Sans({
