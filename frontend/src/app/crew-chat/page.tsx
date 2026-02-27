@@ -109,7 +109,6 @@ export default function CrewChatPage() {
 
   const [pin, setPin] = useState("");
   const [pinDraft, setPinDraft] = useState("");
-  const [rememberPin, setRememberPin] = useState(true);
   const [pinError, setPinError] = useState<string | null>(null);
   const [pinNotice, setPinNotice] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
@@ -155,19 +154,10 @@ export default function CrewChatPage() {
   }, [pin, target]);
 
   useEffect(() => {
-    let saved = "";
-    try {
-      saved = window.localStorage.getItem("crew_chat_pin") || "";
-    } catch {
-      saved = "";
-    }
-    if (saved) {
-      setPin(saved);
-      setPinDraft(saved);
-      setRememberPin(true);
-      void load(saved);
-      return;
-    }
+    // 보안 우선: 앱 재접속 시 항상 PIN 재입력
+    setPin("");
+    setPinDraft("");
+    setUnlocked(false);
     void load("");
   }, [load]);
 
@@ -291,19 +281,8 @@ export default function CrewChatPage() {
     setPinFails(0);
     setPinLockedUntil(null);
 
-    if (rememberPin) {
-      try {
-        window.localStorage.setItem("crew_chat_pin", pinDraft);
-      } catch {}
-      document.cookie = `crew_chat_pin=${encodeURIComponent(pinDraft)}; path=/`;
-      setPinNotice("잠금 해제 완료! 이 브라우저에 PIN을 안전하게 저장했어.");
-    } else {
-      try {
-        window.localStorage.removeItem("crew_chat_pin");
-      } catch {}
-      document.cookie = "crew_chat_pin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-      setPinNotice("잠금 해제 완료! 이 브라우저에는 PIN을 저장하지 않았어.");
-    }
+    // 자동 로그인/기억 기능은 비활성화 (항상 재입력)
+    setPinNotice("잠금 해제 완료! 이 세션에서만 유지돼요.");
   };
 
   const clearSavedPin = async () => {
@@ -312,10 +291,6 @@ export default function CrewChatPage() {
     setUnlocked(false);
     setPinError(null);
     setPinNotice("저장된 PIN을 지웠어. 다시 잠금 상태야.");
-    try {
-      window.localStorage.removeItem("crew_chat_pin");
-    } catch {}
-    document.cookie = "crew_chat_pin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     await load("");
   };
 
@@ -390,15 +365,7 @@ export default function CrewChatPage() {
                 </Button>
               </div>
 
-              <label className="flex items-center gap-2 text-xs text-muted">
-                <input
-                  type="checkbox"
-                  checked={rememberPin}
-                  onChange={(e) => setRememberPin(e.target.checked)}
-                  className="h-4 w-4 rounded border-[color:var(--border)] text-[color:var(--accent)]"
-                />
-                이 브라우저에 PIN 저장하기
-              </label>
+              <p className="text-xs text-muted">보안을 위해 앱 재접속 시 PIN을 다시 입력해요.</p>
 
               {lockRemainSeconds > 0 ? (
                 <p className="text-xs text-[color:var(--warning)]">보안을 위해 {lockRemainSeconds}초 후 다시 시도할 수 있어요.</p>
