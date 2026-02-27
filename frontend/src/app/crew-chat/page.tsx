@@ -354,6 +354,9 @@ export default function CrewChatPage() {
                 }
               }}
               type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="one-time-code"
               autoFocus
             />
             <button
@@ -387,7 +390,9 @@ export default function CrewChatPage() {
 
   return (
     <DashboardShell>
-      <DashboardSidebar />
+      <div className="hidden lg:block">
+        <DashboardSidebar />
+      </div>
       <main className="flex-1 overflow-hidden bg-slate-100 p-3 dark:bg-slate-950 lg:p-4">
         <div className="grid h-[calc(100vh-72px)] grid-cols-1 gap-3 lg:grid-cols-[290px_1fr_280px]">
           <section
