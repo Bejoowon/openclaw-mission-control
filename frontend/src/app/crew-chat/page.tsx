@@ -155,7 +155,12 @@ export default function CrewChatPage() {
   }, [pin, target]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("crew_chat_pin") || "";
+    let saved = "";
+    try {
+      saved = window.localStorage.getItem("crew_chat_pin") || "";
+    } catch {
+      saved = "";
+    }
     if (saved) {
       setPin(saved);
       setPinDraft(saved);
@@ -287,11 +292,15 @@ export default function CrewChatPage() {
     setPinLockedUntil(null);
 
     if (rememberPin) {
-      window.localStorage.setItem("crew_chat_pin", pinDraft);
+      try {
+        window.localStorage.setItem("crew_chat_pin", pinDraft);
+      } catch {}
       document.cookie = `crew_chat_pin=${encodeURIComponent(pinDraft)}; path=/`;
       setPinNotice("잠금 해제 완료! 이 브라우저에 PIN을 안전하게 저장했어.");
     } else {
-      window.localStorage.removeItem("crew_chat_pin");
+      try {
+        window.localStorage.removeItem("crew_chat_pin");
+      } catch {}
       document.cookie = "crew_chat_pin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
       setPinNotice("잠금 해제 완료! 이 브라우저에는 PIN을 저장하지 않았어.");
     }
@@ -303,7 +312,9 @@ export default function CrewChatPage() {
     setUnlocked(false);
     setPinError(null);
     setPinNotice("저장된 PIN을 지웠어. 다시 잠금 상태야.");
-    window.localStorage.removeItem("crew_chat_pin");
+    try {
+      window.localStorage.removeItem("crew_chat_pin");
+    } catch {}
     document.cookie = "crew_chat_pin=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     await load("");
   };
