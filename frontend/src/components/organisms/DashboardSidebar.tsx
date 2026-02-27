@@ -104,7 +104,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <MessageCircle className="h-4 w-4" />
-                Crew chat
+크루 채팅
               </Link>
             </div>
           </div>

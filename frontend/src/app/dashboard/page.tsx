@@ -328,7 +328,7 @@ export default function DashboardPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setCrewError(err instanceof Error ? err.message : "unknown error");
+          setCrewError(err instanceof Error ? err.message : "알 수 없는 오류");
         }
       }
     };
@@ -649,22 +649,28 @@ export default function DashboardPage() {
                   <div className="mb-4 flex items-center justify-between">
                     <div>
                       <h3 className="font-heading text-base font-semibold text-slate-900">
-                        Bang's Crew Snapshot
+방울이 크루 스냅샷
                       </h3>
                       <p className="mt-1 text-sm text-slate-500">
                         agents.list 기반 자동 확장 뷰 (에이전트 추가 시 자동 반영)
                       </p>
+                      <Link
+                        href="/crew-chat"
+                        className="mt-2 inline-flex items-center rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
+                      >
+                        크루 채팅 바로가기
+                      </Link>
                     </div>
                     <div className="text-xs text-slate-500">
                       {crewSnapshot
-                        ? `Agents ${crewSnapshot.totals.agents} · Cron ${crewSnapshot.totals.cron} · Errors ${crewSnapshot.totals.cronErrors}`
-                        : "Loading…"}
+                        ? `에이전트 ${crewSnapshot.totals.agents} · 크론 ${crewSnapshot.totals.cron} · 오류 ${crewSnapshot.totals.cronErrors}`
+                        : "불러오는 중…"}
                     </div>
                   </div>
 
                   {crewError ? (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                      Crew snapshot unavailable: {crewError}
+크루 스냅샷을 불러오지 못했어요: {crewError}
                     </div>
                   ) : null}
 
@@ -686,13 +692,13 @@ export default function DashboardPage() {
                                 : "bg-emerald-100 text-emerald-700"
                             }`}
                           >
-                            cron {agent.cronErrors > 0 ? "needs care" : "healthy"}
+                            크론 {agent.cronErrors > 0 ? "점검 필요" : "정상"}
                           </span>
                         </div>
                         <div className="mt-3 space-y-1 text-sm text-slate-600">
-                          <div>Skills: {agent.skillsCount}</div>
-                          <div>Cron jobs: {agent.cronTotal}</div>
-                          <div>Cron errors: {agent.cronErrors}</div>
+                          <div>스킬: {agent.skillsCount}</div>
+                          <div>크론 작업: {agent.cronTotal}</div>
+                          <div>크론 오류: {agent.cronErrors}</div>
                         </div>
                         {agent.skills.length > 0 ? (
                           <div className="mt-3 flex flex-wrap gap-1">
@@ -716,16 +722,16 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                    <h4 className="text-sm font-semibold text-slate-900">Cron Timeline (Live)</h4>
+                    <h4 className="text-sm font-semibold text-slate-900">크론 타임라인 (실시간)</h4>
                     <div className="mt-3 overflow-x-auto">
                       <table className="min-w-full text-left text-xs">
                         <thead className="text-slate-500">
                           <tr>
-                            <th className="pr-4">Agent</th>
-                            <th className="pr-4">Job</th>
-                            <th className="pr-4">Status</th>
-                            <th className="pr-4">Next</th>
-                            <th className="pr-4">Last</th>
+                            <th className="pr-4">에이전트</th>
+                            <th className="pr-4">작업</th>
+                            <th className="pr-4">상태</th>
+                            <th className="pr-4">다음 실행</th>
+                            <th className="pr-4">마지막 실행</th>
                           </tr>
                         </thead>
                         <tbody>

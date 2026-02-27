@@ -43,7 +43,7 @@ async function getAgentIds() {
   }
 }
 
-async function askAgent(agentId: string, message: string) {
+async function askAgent(agentId: string, message: string, room: string) {
   const startedAt = new Date().toISOString();
   try {
     const { stdout } = await execFileAsync(
@@ -62,7 +62,7 @@ async function askAgent(agentId: string, message: string) {
     const msg = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       ts: new Date().toISOString(),
-      room: "crew",
+      room,
       type: "agent-reply",
       from: agentId,
       to: "user",
@@ -76,7 +76,7 @@ async function askAgent(agentId: string, message: string) {
     const msg = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       ts: new Date().toISOString(),
-      room: "crew",
+      room,
       type: "agent-reply",
       from: agentId,
       to: "user",
@@ -131,10 +131,14 @@ export async function POST(req: Request) {
 
     const prompt =
       mode === "group"
-        ? `[Crew Group Chat] ${from} says: ${text}`
-        : `[Direct Message from ${from}] ${text}`;
+        ? `[크루 단체방] ${from}: ${text}`
+        : `[개인 메시지 - 보낸 사람 ${from}] ${text}`;
 
-    const replies = await Promise.all(targets.map((agentId) => askAgent(agentId, prompt)));
+    const replies = await Promise.all(
+      targets.map((agentId) =>
+        askAgent(agentId, prompt, mode === "group" ? "crew" : `dm:${agentId}`),
+      ),
+    );
 
     return NextResponse.json({ ok: true, sent: userMsg, repliesCount: replies.length });
   } catch (error) {
