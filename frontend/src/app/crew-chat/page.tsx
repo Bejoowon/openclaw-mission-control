@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
 import { Badge } from "@/components/ui/badge";
@@ -102,6 +102,9 @@ export default function CrewChatPage() {
   const [target, setTarget] = useState<string>("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
+  const inFlightSendRef = useRef(false);
+  const [acknowledgedMessageIds, setAcknowledgedMessageIds] = useState<Record<string, true>>({});
 
   const [roomFilter, setRoomFilter] = useState<RoomFilter>("all");
   const [roomKeyword, setRoomKeyword] = useState("");
@@ -295,34 +298,92 @@ export default function CrewChatPage() {
   };
 
   const send = async () => {
-    if (!text.trim() || !unlocked || (mode === "direct" && !target)) return;
+    const trimmed = text.trim();
+    if (!trimmed || !unlocked || (mode === "direct" && !target)) return;
+    if (inFlightSendRef.current) return;
+
+    const room = mode === "group" ? "crew" : `dm:${target}`;
+    const startedAt = new Date().toISOString();
+    const optimisticId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticMessage: ChatMsg = {
+      id: optimisticId,
+      ts: startedAt,
+      room,
+      type: "user",
+      from: "주원",
+      to: mode === "group" ? "all" : target,
+      text: trimmed,
+      status: "sent",
+      startedAt,
+    };
+
+    inFlightSendRef.current = true;
     setBusy(true);
     setSendError(null);
+    setText("");
+    setMessages((prev) => [...prev, optimisticMessage]);
 
     try {
+      const requestId = typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
       const res = await fetch("/api/crew-chat/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-idempotency-key": requestId,
           ...(pin ? { "x-crew-pin": pin } : {}),
         },
         body: JSON.stringify(
           mode === "group"
-            ? { mode: "group", from: "주원", text }
-            : { mode: "direct", from: "주원", to: target, text },
+            ? { mode: "group", from: "주원", text: trimmed, requestId }
+            : { mode: "direct", from: "주원", to: target, text: trimmed, requestId },
         ),
       });
 
       if (!res.ok) {
-        const payload = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(payload.error || "메시지를 전송하지 못했어요.");
+        const payload = (await res.json().catch(() => ({}))) as { error?: string; errorInfo?: { message?: string } };
+        throw new Error(payload.errorInfo?.message || payload.error || "메시지를 전송하지 못했어요.");
       }
 
-      setText("");
+      const payload = (await res.json()) as { sent?: ChatMsg };
+      if (payload.sent?.id) {
+        const sentId = payload.sent.id;
+        setAcknowledgedMessageIds((prev) => ({ ...prev, [sentId]: true }));
+      }
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === optimisticId
+            ? {
+                ...msg,
+                ...(payload.sent ?? {}),
+                id: payload.sent?.id ?? msg.id,
+                ts: payload.sent?.ts ?? msg.ts,
+                status: "ok",
+                startedAt: msg.startedAt,
+              }
+            : msg,
+        ),
+      );
+
       await load();
     } catch (error) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === optimisticId
+            ? {
+                ...msg,
+                status: "error",
+                ts: new Date().toISOString(),
+              }
+            : msg,
+        ),
+      );
       setSendError(error instanceof Error ? error.message : "메시지를 전송하지 못했어요.");
     } finally {
+      inFlightSendRef.current = false;
       setBusy(false);
     }
   };
@@ -505,7 +566,11 @@ export default function CrewChatPage() {
 
                 {filtered.map((m) => {
                   const mine = m.from === "주원";
-                  const badge = statusLabel[m.status ?? ""];
+                  const resolvedStatus =
+                    mine && m.status === "sent" && acknowledgedMessageIds[m.id]
+                      ? "ok"
+                      : m.status;
+                  const badge = statusLabel[resolvedStatus ?? ""];
                   const elapsed = elapsedLabel(m.startedAt, m.ts);
 
                   return (
@@ -521,7 +586,7 @@ export default function CrewChatPage() {
                           <span className="font-medium text-strong">{m.from}</span>
                           {badge ? (
                             <Badge
-                              variant={getStatusVariant(m.status)}
+                              variant={getStatusVariant(resolvedStatus)}
                               className="px-1.5 py-0.5 text-[10px] normal-case tracking-normal"
                             >
                               {badge}
@@ -594,14 +659,20 @@ export default function CrewChatPage() {
                     }
                     rows={2}
                     className="min-h-[58px] resize-none"
+                    enterKeyHint="send"
+                    onCompositionStart={() => setIsComposing(true)}
+                    onCompositionEnd={() => setIsComposing(false)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void send();
+                      if (e.key !== "Enter" || e.shiftKey) return;
+                      const nativeEvent = e.nativeEvent as KeyboardEvent;
+                      if (isComposing || nativeEvent.isComposing || nativeEvent.keyCode === 229) {
+                        return;
                       }
+                      e.preventDefault();
+                      void send();
                     }}
                   />
-                  <Button onClick={() => void send()} disabled={busy || !text.trim()}>
+                  <Button onClick={() => void send()} disabled={busy || inFlightSendRef.current || !text.trim()}>
                     {busy ? "전송 중" : "보내기"}
                   </Button>
                 </div>

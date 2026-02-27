@@ -6,8 +6,11 @@ import { promisify } from "node:util";
 
 import { NextResponse } from "next/server";
 import { isValidCrewPin, readCrewPinFromRequest } from "../_auth";
+import { appendCrewChatLog, findRecentByRequestId } from "../_log";
 
 const execFileAsync = promisify(execFile);
+
+const ACK_VERSION = "2026-02-crew-chat-v2";
 
 type SendBody = {
   from?: string;
@@ -15,20 +18,30 @@ type SendBody = {
   to?: string;
   targets?: string[];
   text?: string;
+  requestId?: string;
 };
-
-function logPath() {
-  return path.join(os.homedir(), ".openclaw", "dashboard", "crew-chat-log.jsonl");
-}
 
 function configPath() {
   return path.join(os.homedir(), ".openclaw", "openclaw.json");
 }
 
-async function appendLog(entry: Record<string, unknown>) {
-  const file = logPath();
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.appendFile(file, JSON.stringify(entry) + "\n", "utf8");
+function apiError(status: number, code: string, message: string, details?: Record<string, unknown>) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: message,
+      errorInfo: { code, message, retryable: status >= 500, ...(details ? { details } : {}) },
+    },
+    { status },
+  );
+}
+
+function normalizeRequestId(req: Request, body: SendBody) {
+  const headerKey = req.headers.get("x-idempotency-key")?.trim();
+  const bodyKey = body.requestId?.trim();
+  const key = headerKey || bodyKey;
+  if (key && key.length > 0) return key.slice(0, 128);
+  return `auto-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 async function getAgentIds() {
@@ -37,19 +50,19 @@ async function getAgentIds() {
     const parsed = JSON.parse(raw) as { agents?: { list?: Array<{ id?: string }> } };
     return (parsed.agents?.list ?? [])
       .map((a) => a.id)
-      .filter((id): id is string => Boolean(id));
+      .filter((id): id is string => Boolean(id) && id !== "main");
   } catch {
     return [];
   }
 }
 
-async function askAgent(agentId: string, message: string, room: string) {
+async function askAgent(agentId: string, message: string, room: string, requestId: string) {
   const startedAt = new Date().toISOString();
   try {
     const { stdout } = await execFileAsync(
       "openclaw",
       ["agent", "--agent", agentId, "--message", message, "--json"],
-      { timeout: 60000 },
+      { timeout: 180_000 },
     );
 
     const json = JSON.parse(stdout) as {
@@ -59,7 +72,7 @@ async function askAgent(agentId: string, message: string, room: string) {
 
     const text = json.result?.payloads?.map((p) => p.text).filter(Boolean).join("\n\n") || "(응답 없음)";
 
-    const msg = {
+    await appendCrewChatLog({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       ts: new Date().toISOString(),
       room,
@@ -69,11 +82,10 @@ async function askAgent(agentId: string, message: string, room: string) {
       text,
       status: json.status ?? "ok",
       startedAt,
-    };
-    await appendLog(msg);
-    return msg;
+      metadata: { requestId },
+    });
   } catch (error) {
-    const msg = {
+    await appendCrewChatLog({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       ts: new Date().toISOString(),
       room,
@@ -83,68 +95,102 @@ async function askAgent(agentId: string, message: string, room: string) {
       text: error instanceof Error ? error.message : "agent call failed",
       status: "error",
       startedAt,
-    };
-    await appendLog(msg);
-    return msg;
+      metadata: { requestId },
+    });
   }
+}
+
+function fireAndForgetAgentCalls(targets: string[], prompt: string, room: string, requestId: string) {
+  void Promise.all(targets.map((agentId) => askAgent(agentId, prompt, room, requestId))).catch(async (error) => {
+    await appendCrewChatLog({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      ts: new Date().toISOString(),
+      room,
+      type: "system",
+      from: "crew-chat-api",
+      to: "user",
+      text: error instanceof Error ? error.message : "async dispatch failed",
+      status: "error",
+      metadata: { requestId },
+    });
+  });
 }
 
 export async function POST(req: Request) {
   try {
     const pin = readCrewPinFromRequest(req);
     if (!isValidCrewPin(pin)) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+      return apiError(401, "UNAUTHORIZED", "인증이 필요해요.");
     }
 
-    const body = (await req.json()) as SendBody;
+    const body = (await req.json().catch(() => ({}))) as SendBody;
     const from = body.from || "user";
     const mode = body.mode || "group";
     const text = (body.text || "").trim();
+    const requestId = normalizeRequestId(req, body);
 
     if (!text) {
-      return NextResponse.json({ error: "text is required" }, { status: 400 });
+      return apiError(400, "VALIDATION_ERROR", "text is required", { field: "text" });
+    }
+
+    const duplicated = await findRecentByRequestId(requestId);
+    if (duplicated) {
+      return NextResponse.json({
+        ok: true,
+        ack: {
+          accepted: true,
+          duplicate: true,
+          requestId,
+          contract: ACK_VERSION,
+        },
+      });
     }
 
     let targets: string[] = [];
     if (mode === "direct") {
-      if (!body.to) return NextResponse.json({ error: "to is required for direct" }, { status: 400 });
+      if (!body.to) return apiError(400, "VALIDATION_ERROR", "to is required for direct", { field: "to" });
       targets = [body.to];
     } else {
-      if (body.targets && body.targets.length > 0) {
-        targets = body.targets;
-      } else {
-        targets = await getAgentIds();
-      }
+      targets = body.targets && body.targets.length > 0 ? body.targets : await getAgentIds();
     }
 
+    if (targets.length === 0) {
+      return apiError(404, "NO_TARGETS", "메시지를 받을 에이전트를 찾지 못했어요.");
+    }
+
+    const room = mode === "group" ? "crew" : `dm:${targets[0]}`;
     const userMsg = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       ts: new Date().toISOString(),
-      room: mode === "group" ? "crew" : `dm:${targets[0]}`,
+      room,
       type: "user",
       from,
       to: mode === "group" ? "all" : targets[0],
       text,
       status: "sent",
+      metadata: { requestId },
     };
-    await appendLog(userMsg);
 
-    const prompt =
-      mode === "group"
-        ? `[크루 단체방] ${from}: ${text}`
-        : `[개인 메시지 - 보낸 사람 ${from}] ${text}`;
+    await appendCrewChatLog(userMsg);
 
-    const replies = await Promise.all(
-      targets.map((agentId) =>
-        askAgent(agentId, prompt, mode === "group" ? "crew" : `dm:${agentId}`),
-      ),
-    );
+    const prompt = mode === "group" ? `[크루 단체방] ${from}: ${text}` : `[개인 메시지 - 보낸 사람 ${from}] ${text}`;
 
-    return NextResponse.json({ ok: true, sent: userMsg, repliesCount: replies.length });
+    fireAndForgetAgentCalls(targets, prompt, room, requestId);
+
+    return NextResponse.json({
+      ok: true,
+      ack: {
+        accepted: true,
+        duplicate: false,
+        requestId,
+        room,
+        targets,
+        queuedAt: new Date().toISOString(),
+        contract: ACK_VERSION,
+      },
+      sent: userMsg,
+    });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "send failed" },
-      { status: 500 },
-    );
+    return apiError(500, "SEND_FAILED", error instanceof Error ? error.message : "send failed");
   }
 }

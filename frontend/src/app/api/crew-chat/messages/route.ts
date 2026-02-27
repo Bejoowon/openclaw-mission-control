@@ -1,52 +1,31 @@
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-
 import { NextResponse } from "next/server";
+
 import { isValidCrewPin, readCrewPinFromRequest } from "../_auth";
+import { parseCrewChatLines, readRecentCrewChatLines } from "../_log";
 
-function logPath() {
-  return path.join(os.homedir(), ".openclaw", "dashboard", "crew-chat-log.jsonl");
-}
-
-async function ensureFile(file: string) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  try {
-    await fs.access(file);
-  } catch {
-    await fs.writeFile(file, "", "utf8");
-  }
+function apiError(status: number, code: string, message: string, details?: Record<string, unknown>) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: message,
+      errorInfo: { code, message, retryable: status >= 500, ...(details ? { details } : {}) },
+    },
+    { status },
+  );
 }
 
 export async function GET(req: Request) {
   try {
     const pin = readCrewPinFromRequest(req);
     if (!isValidCrewPin(pin)) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+      return apiError(401, "UNAUTHORIZED", "인증이 필요해요.");
     }
-    const file = logPath();
-    await ensureFile(file);
-    const raw = await fs.readFile(file, "utf8");
-    const lines = raw
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .slice(-200);
 
-    const messages = lines
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean);
+    const lines = await readRecentCrewChatLines(200);
+    const messages = parseCrewChatLines(lines);
 
-    return NextResponse.json({ messages });
+    return NextResponse.json({ ok: true, messages });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "read failed" },
-      { status: 500 },
-    );
+    return apiError(500, "READ_FAILED", error instanceof Error ? error.message : "read failed");
   }
 }

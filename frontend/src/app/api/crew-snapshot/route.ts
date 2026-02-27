@@ -8,6 +8,9 @@ import { NextResponse } from "next/server";
 
 const execFileAsync = promisify(execFile);
 
+const LIVE_TIMEOUT_MS = 4_500;
+const CACHE_FRESH_MS = 15_000;
+
 type AgentEntry = {
   id?: string;
   name?: string;
@@ -86,10 +89,15 @@ async function readReportPreview(reportPath: string) {
   }
 }
 
-async function readCachedSnapshot(openclawDir: string): Promise<Snapshot | null> {
+type CachedPayload = {
+  snapshot: Snapshot;
+  cachedAt: string;
+};
+
+async function readCachedSnapshot(openclawDir: string): Promise<CachedPayload | null> {
   try {
     const raw = await fs.readFile(cachePath(openclawDir), "utf8");
-    return JSON.parse(raw) as Snapshot;
+    return JSON.parse(raw) as CachedPayload;
   } catch {
     return null;
   }
@@ -99,110 +107,134 @@ async function writeCachedSnapshot(openclawDir: string, snapshot: Snapshot) {
   try {
     const p = cachePath(openclawDir);
     await fs.mkdir(path.dirname(p), { recursive: true });
-    await fs.writeFile(p, JSON.stringify(snapshot), "utf8");
+    const payload: CachedPayload = { snapshot, cachedAt: new Date().toISOString() };
+    await fs.writeFile(p, JSON.stringify(payload), "utf8");
   } catch {
     // ignore cache write failure
   }
 }
 
-export async function GET() {
-  const openclawDir = resolveOpenclawPath();
+function isFreshCache(cached: CachedPayload | null) {
+  if (!cached?.cachedAt) return false;
+  const t = new Date(cached.cachedAt).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t <= CACHE_FRESH_MS;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timeout (${timeoutMs}ms)`)), timeoutMs);
+    }),
+  ]);
+}
+
+async function buildLiveSnapshot(openclawDir: string): Promise<Snapshot> {
+  const configPath = path.join(openclawDir, "openclaw.json");
+  const configRaw = await fs.readFile(configPath, "utf8");
+  const config = JSON.parse(configRaw) as {
+    agents?: { list?: AgentEntry[] };
+  };
+
+  const agentList = (config.agents?.list ?? [])
+    .filter((a) => a.id)
+    .map((a) => ({
+      id: a.id as string,
+      name: a.name || (a.id as string),
+      workspace: a.workspace,
+    }));
+
+  let jobs: Array<{
+    id?: string;
+    name?: string;
+    enabled?: boolean;
+    agentId?: string;
+    state?: {
+      nextRunAtMs?: number;
+      lastRunAtMs?: number;
+      lastStatus?: string;
+      lastError?: string;
+    };
+  }> = [];
 
   try {
-    const configPath = path.join(openclawDir, "openclaw.json");
-    const configRaw = await fs.readFile(configPath, "utf8");
-    const config = JSON.parse(configRaw) as {
-      agents?: { list?: AgentEntry[] };
-    };
+    const cronStdout = await execFileAsync("openclaw", ["cron", "list", "--json"], {
+      timeout: 4_000,
+    }).then((r) => r.stdout);
 
-    const agentList = (config.agents?.list ?? [])
-      .filter((a) => a.id)
-      .map((a) => ({
-        id: a.id as string,
-        name: a.name || (a.id as string),
-        workspace: a.workspace,
-      }));
+    const cronJson = JSON.parse(cronStdout) as { jobs?: typeof jobs };
+    jobs = cronJson.jobs ?? [];
+  } catch {
+    jobs = [];
+  }
 
-    let jobs: Array<{
-      id?: string;
-      name?: string;
-      enabled?: boolean;
-      agentId?: string;
-      state?: {
-        nextRunAtMs?: number;
-        lastRunAtMs?: number;
-        lastStatus?: string;
-        lastError?: string;
+  const agents = await Promise.all(
+    agentList.map(async (agent) => {
+      const skillsDir = agent.workspace ? path.join(agent.workspace, "skills") : "";
+      const skills = skillsDir ? await safeDirList(skillsDir) : [];
+      const agentJobs = jobs.filter((j) => j.agentId === agent.id);
+      const cronErrors = agentJobs.filter((j) => j.state?.lastStatus === "error").length;
+
+      return {
+        ...agent,
+        skillsCount: skills.length,
+        skills,
+        cronTotal: agentJobs.length,
+        cronErrors,
       };
-    }> = [];
+    }),
+  );
 
-    try {
-      const cronStdout = await execFileAsync("openclaw", ["cron", "list", "--json"], {
-        timeout: 5000,
-      }).then((r) => r.stdout);
+  const cronJobs = jobs
+    .filter((j) => j.agentId)
+    .map((j) => ({
+      id: j.id ?? "-",
+      name: j.name ?? "-",
+      agentId: j.agentId ?? "-",
+      enabled: Boolean(j.enabled),
+      nextRun: fmt(j.state?.nextRunAtMs),
+      lastRun: fmt(j.state?.lastRunAtMs),
+      status: j.state?.lastStatus ?? "pending",
+      error: j.state?.lastError,
+    }));
 
-      const cronJson = JSON.parse(cronStdout) as { jobs?: typeof jobs };
-      jobs = cronJson.jobs ?? [];
-    } catch {
-      jobs = [];
-    }
+  const reportPath = path.join(openclawDir, "agents", "8lomi", "tmp", "agent_review_report.md");
+  const reportPreview = await readReportPreview(reportPath);
 
-    const agents = await Promise.all(
-      agentList.map(async (agent) => {
-        const skillsDir = agent.workspace ? path.join(agent.workspace, "skills") : "";
-        const skills = skillsDir ? await safeDirList(skillsDir) : [];
-        const agentJobs = jobs.filter((j) => j.agentId === agent.id);
-        const cronErrors = agentJobs.filter((j) => j.state?.lastStatus === "error").length;
+  return {
+    generatedAt: new Date().toISOString(),
+    source: "openclaw.json + openclaw cron list",
+    agents,
+    cronJobs,
+    care: {
+      reportPath,
+      reportPreview,
+    },
+    totals: {
+      agents: agents.length,
+      cron: jobs.length,
+      cronErrors: jobs.filter((j) => j.state?.lastStatus === "error").length,
+    },
+  };
+}
 
-        return {
-          ...agent,
-          skillsCount: skills.length,
-          skills,
-          cronTotal: agentJobs.length,
-          cronErrors,
-        };
-      }),
-    );
+export async function GET() {
+  const openclawDir = resolveOpenclawPath();
+  const cached = await readCachedSnapshot(openclawDir);
 
-    const cronJobs = jobs
-      .filter((j) => j.agentId)
-      .map((j) => ({
-        id: j.id ?? "-",
-        name: j.name ?? "-",
-        agentId: j.agentId ?? "-",
-        enabled: Boolean(j.enabled),
-        nextRun: fmt(j.state?.nextRunAtMs),
-        lastRun: fmt(j.state?.lastRunAtMs),
-        status: j.state?.lastStatus ?? "pending",
-        error: j.state?.lastError,
-      }));
+  if (isFreshCache(cached)) {
+    return NextResponse.json(cached!.snapshot);
+  }
 
-    const reportPath = path.join(openclawDir, "agents", "8lomi", "tmp", "agent_review_report.md");
-    const reportPreview = await readReportPreview(reportPath);
-
-    const snapshot: Snapshot = {
-      generatedAt: new Date().toISOString(),
-      source: "openclaw.json + openclaw cron list",
-      agents,
-      cronJobs,
-      care: {
-        reportPath,
-        reportPreview,
-      },
-      totals: {
-        agents: agents.length,
-        cron: jobs.length,
-        cronErrors: jobs.filter((j) => j.state?.lastStatus === "error").length,
-      },
-    };
-
+  try {
+    const snapshot = await withTimeout(buildLiveSnapshot(openclawDir), LIVE_TIMEOUT_MS, "crew-snapshot");
     await writeCachedSnapshot(openclawDir, snapshot);
     return NextResponse.json(snapshot);
-  } catch (error) {
-    const cached = await readCachedSnapshot(openclawDir);
-    if (cached) {
+  } catch {
+    if (cached?.snapshot) {
       return NextResponse.json({
-        ...cached,
+        ...cached.snapshot,
         stale: true,
         warning: "실시간 상태 조회에 실패해 최근 캐시를 보여줘요.",
       });
