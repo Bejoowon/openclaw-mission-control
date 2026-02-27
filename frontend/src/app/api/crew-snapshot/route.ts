@@ -17,6 +17,8 @@ type AgentEntry = {
 type Snapshot = {
   generatedAt: string;
   source: string;
+  stale?: boolean;
+  warning?: string;
   agents: Array<{
     id: string;
     name: string;
@@ -53,6 +55,10 @@ function resolveOpenclawPath() {
   return path.join(os.homedir(), ".openclaw");
 }
 
+function cachePath(openclawDir: string) {
+  return path.join(openclawDir, "dashboard", "crew-snapshot-cache.json");
+}
+
 async function safeDirList(dirPath: string) {
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -80,9 +86,29 @@ async function readReportPreview(reportPath: string) {
   }
 }
 
-export async function GET() {
+async function readCachedSnapshot(openclawDir: string): Promise<Snapshot | null> {
   try {
-    const openclawDir = resolveOpenclawPath();
+    const raw = await fs.readFile(cachePath(openclawDir), "utf8");
+    return JSON.parse(raw) as Snapshot;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCachedSnapshot(openclawDir: string, snapshot: Snapshot) {
+  try {
+    const p = cachePath(openclawDir);
+    await fs.mkdir(path.dirname(p), { recursive: true });
+    await fs.writeFile(p, JSON.stringify(snapshot), "utf8");
+  } catch {
+    // ignore cache write failure
+  }
+}
+
+export async function GET() {
+  const openclawDir = resolveOpenclawPath();
+
+  try {
     const configPath = path.join(openclawDir, "openclaw.json");
     const configRaw = await fs.readFile(configPath, "utf8");
     const config = JSON.parse(configRaw) as {
@@ -97,37 +123,36 @@ export async function GET() {
         workspace: a.workspace,
       }));
 
-    const cronStdout = await execFileAsync("openclaw", ["cron", "list", "--json"], {
-      timeout: 10000,
-    }).then((r) => r.stdout);
+    let jobs: Array<{
+      id?: string;
+      name?: string;
+      enabled?: boolean;
+      agentId?: string;
+      state?: {
+        nextRunAtMs?: number;
+        lastRunAtMs?: number;
+        lastStatus?: string;
+        lastError?: string;
+      };
+    }> = [];
 
-    const cronJson = JSON.parse(cronStdout) as {
-      jobs?: Array<{
-        id?: string;
-        name?: string;
-        enabled?: boolean;
-        agentId?: string;
-        state?: {
-          nextRunAtMs?: number;
-          lastRunAtMs?: number;
-          lastStatus?: string;
-          lastError?: string;
-        };
-      }>;
-    };
+    try {
+      const cronStdout = await execFileAsync("openclaw", ["cron", "list", "--json"], {
+        timeout: 5000,
+      }).then((r) => r.stdout);
 
-    const jobs = cronJson.jobs ?? [];
+      const cronJson = JSON.parse(cronStdout) as { jobs?: typeof jobs };
+      jobs = cronJson.jobs ?? [];
+    } catch {
+      jobs = [];
+    }
 
     const agents = await Promise.all(
       agentList.map(async (agent) => {
-        const skillsDir = agent.workspace
-          ? path.join(agent.workspace, "skills")
-          : "";
+        const skillsDir = agent.workspace ? path.join(agent.workspace, "skills") : "";
         const skills = skillsDir ? await safeDirList(skillsDir) : [];
         const agentJobs = jobs.filter((j) => j.agentId === agent.id);
-        const cronErrors = agentJobs.filter(
-          (j) => j.state?.lastStatus === "error",
-        ).length;
+        const cronErrors = agentJobs.filter((j) => j.state?.lastStatus === "error").length;
 
         return {
           ...agent,
@@ -171,14 +196,32 @@ export async function GET() {
       },
     };
 
+    await writeCachedSnapshot(openclawDir, snapshot);
     return NextResponse.json(snapshot);
   } catch (error) {
-    return NextResponse.json(
-      {
-        error: "crew snapshot unavailable",
-        detail: error instanceof Error ? error.message : "unknown",
+    const cached = await readCachedSnapshot(openclawDir);
+    if (cached) {
+      return NextResponse.json({
+        ...cached,
+        stale: true,
+        warning: "실시간 상태 조회에 실패해 최근 캐시를 보여줘요.",
+      });
+    }
+
+    const fallback: Snapshot = {
+      generatedAt: new Date().toISOString(),
+      source: "fallback",
+      stale: true,
+      warning: "상태 데이터를 불러오지 못했어요. 잠시 후 다시 시도해줘.",
+      agents: [],
+      cronJobs: [],
+      care: {
+        reportPath: "-",
+        reportPreview: ["(점검 보고서 없음)"],
       },
-      { status: 500 },
-    );
+      totals: { agents: 0, cron: 0, cronErrors: 0 },
+    };
+
+    return NextResponse.json(fallback);
   }
 }
