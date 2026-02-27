@@ -26,6 +26,20 @@ type Snapshot = {
     cronTotal: number;
     cronErrors: number;
   }>;
+  cronJobs: Array<{
+    id: string;
+    name: string;
+    agentId: string;
+    enabled: boolean;
+    nextRun: string;
+    lastRun: string;
+    status: string;
+    error?: string;
+  }>;
+  care: {
+    reportPath: string;
+    reportPreview: string[];
+  };
   totals: {
     agents: number;
     cron: number;
@@ -45,6 +59,24 @@ async function safeDirList(dirPath: string) {
     return entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
   } catch {
     return [];
+  }
+}
+
+function fmt(ms?: number) {
+  if (!ms) return "-";
+  return new Date(ms).toISOString();
+}
+
+async function readReportPreview(reportPath: string) {
+  try {
+    const raw = await fs.readFile(reportPath, "utf8");
+    return raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .slice(0, 8);
+  } catch {
+    return ["(점검 보고서 없음)"];
   }
 }
 
@@ -70,7 +102,18 @@ export async function GET() {
     }).then((r) => r.stdout);
 
     const cronJson = JSON.parse(cronStdout) as {
-      jobs?: Array<{ agentId?: string; state?: { lastStatus?: string } }>;
+      jobs?: Array<{
+        id?: string;
+        name?: string;
+        enabled?: boolean;
+        agentId?: string;
+        state?: {
+          nextRunAtMs?: number;
+          lastRunAtMs?: number;
+          lastStatus?: string;
+          lastError?: string;
+        };
+      }>;
     };
 
     const jobs = cronJson.jobs ?? [];
@@ -96,10 +139,31 @@ export async function GET() {
       }),
     );
 
+    const cronJobs = jobs
+      .filter((j) => j.agentId)
+      .map((j) => ({
+        id: j.id ?? "-",
+        name: j.name ?? "-",
+        agentId: j.agentId ?? "-",
+        enabled: Boolean(j.enabled),
+        nextRun: fmt(j.state?.nextRunAtMs),
+        lastRun: fmt(j.state?.lastRunAtMs),
+        status: j.state?.lastStatus ?? "pending",
+        error: j.state?.lastError,
+      }));
+
+    const reportPath = path.join(openclawDir, "agents", "8lomi", "tmp", "agent_review_report.md");
+    const reportPreview = await readReportPreview(reportPath);
+
     const snapshot: Snapshot = {
       generatedAt: new Date().toISOString(),
       source: "openclaw.json + openclaw cron list",
       agents,
+      cronJobs,
+      care: {
+        reportPath,
+        reportPreview,
+      },
       totals: {
         agents: agents.length,
         cron: jobs.length,

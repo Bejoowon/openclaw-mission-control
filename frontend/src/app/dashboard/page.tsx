@@ -84,6 +84,20 @@ type CrewSnapshot = {
     cronTotal: number;
     cronErrors: number;
   }>;
+  cronJobs: Array<{
+    id: string;
+    name: string;
+    agentId: string;
+    enabled: boolean;
+    nextRun: string;
+    lastRun: string;
+    status: string;
+    error?: string;
+  }>;
+  care: {
+    reportPath: string;
+    reportPreview: string[];
+  };
   totals: {
     agents: number;
     cron: number;
@@ -699,6 +713,48 @@ export default function DashboardPage() {
                         ) : null}
                       </div>
                     ))}
+                  </div>
+
+                  <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <h4 className="text-sm font-semibold text-slate-900">Cron Timeline (Live)</h4>
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-left text-xs">
+                        <thead className="text-slate-500">
+                          <tr>
+                            <th className="pr-4">Agent</th>
+                            <th className="pr-4">Job</th>
+                            <th className="pr-4">Status</th>
+                            <th className="pr-4">Next</th>
+                            <th className="pr-4">Last</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(crewSnapshot?.cronJobs ?? []).map((job) => (
+                            <tr key={job.id + job.name} className="border-t border-slate-200 text-slate-700">
+                              <td className="py-2 pr-4">{job.agentId}</td>
+                              <td className="py-2 pr-4">{job.name}</td>
+                              <td className="py-2 pr-4">
+                                <span className={`rounded-full px-2 py-0.5 ${job.status === "error" ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {job.status}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-4">{job.nextRun}</td>
+                              <td className="py-2 pr-4">{job.lastRun}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <h4 className="text-sm font-semibold text-slate-900">방울이 케어 로그 미리보기</h4>
+                    <p className="mt-1 text-xs text-slate-500">{crewSnapshot?.care.reportPath}</p>
+                    <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                      {(crewSnapshot?.care.reportPreview ?? []).map((line, idx) => (
+                        <li key={idx}>{line}</li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
 
