@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -71,6 +71,24 @@ type WipRangeSeries = {
   range: RangeKey;
   bucket: BucketKey;
   points: WipPoint[];
+};
+
+type CrewSnapshot = {
+  generatedAt: string;
+  agents: Array<{
+    id: string;
+    name: string;
+    workspace?: string;
+    skillsCount: number;
+    skills: string[];
+    cronTotal: number;
+    cronErrors: number;
+  }>;
+  totals: {
+    agents: number;
+    cron: number;
+    cronErrors: number;
+  };
 };
 
 const hourFormatter = new Intl.DateTimeFormat("en-US", { hour: "numeric" });
@@ -278,6 +296,42 @@ export default function DashboardPage() {
     selectedBoardParam && selectedBoardParam !== ALL_FILTER_VALUE
       ? selectedBoardParam
       : null;
+
+  const [crewSnapshot, setCrewSnapshot] = useState<CrewSnapshot | null>(null);
+  const [crewError, setCrewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const res = await fetch("/api/crew-snapshot", { cache: "no-store" });
+        if (!res.ok) throw new Error("crew snapshot fetch failed");
+        const data = (await res.json()) as CrewSnapshot;
+        if (!cancelled) {
+          setCrewSnapshot(data);
+          setCrewError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setCrewError(err instanceof Error ? err.message : "unknown error");
+        }
+      }
+    };
+
+    if (isSignedIn) {
+      load();
+      const timer = setInterval(load, 30000);
+      return () => {
+        cancelled = true;
+        clearInterval(timer);
+      };
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn]);
 
   const boardsQuery = useListBoardsApiV1BoardsGet<
     listBoardsApiV1BoardsGetResponse,
@@ -575,6 +629,77 @@ export default function DashboardPage() {
                     icon={<Timer className="h-4 w-4" />}
                     progress={cycleProgress}
                   />
+                </div>
+
+                <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-heading text-base font-semibold text-slate-900">
+                        Bang's Crew Snapshot
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        agents.list 기반 자동 확장 뷰 (에이전트 추가 시 자동 반영)
+                      </p>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {crewSnapshot
+                        ? `Agents ${crewSnapshot.totals.agents} · Cron ${crewSnapshot.totals.cron} · Errors ${crewSnapshot.totals.cronErrors}`
+                        : "Loading…"}
+                    </div>
+                  </div>
+
+                  {crewError ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                      Crew snapshot unavailable: {crewError}
+                    </div>
+                  ) : null}
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {(crewSnapshot?.agents ?? []).map((agent) => (
+                      <div
+                        key={agent.id}
+                        className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h4 className="font-semibold text-slate-900">{agent.name}</h4>
+                            <p className="text-xs text-slate-500">{agent.id}</p>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs font-medium ${
+                              agent.cronErrors > 0
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            cron {agent.cronErrors > 0 ? "needs care" : "healthy"}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-1 text-sm text-slate-600">
+                          <div>Skills: {agent.skillsCount}</div>
+                          <div>Cron jobs: {agent.cronTotal}</div>
+                          <div>Cron errors: {agent.cronErrors}</div>
+                        </div>
+                        {agent.skills.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-1">
+                            {agent.skills.slice(0, 4).map((skill) => (
+                              <span
+                                key={skill}
+                                className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-600"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                            {agent.skills.length > 4 ? (
+                              <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500">
+                                +{agent.skills.length - 4}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
