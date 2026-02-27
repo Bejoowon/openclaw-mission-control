@@ -19,12 +19,12 @@ export function LandingShell({ children }: { children: ReactNode }) {
     <div className="landing-enterprise">
       <nav className="landing-nav" aria-label="Primary navigation">
         <div className="nav-container">
-          <Link href="/" className="logo-section" aria-label="OpenClaw home">
+          <Link href="/" className="logo-section" aria-label="Bang's Trio home">
             <div className="logo-icon" aria-hidden="true">
-              OC
+              B3
             </div>
             <div className="logo-text">
-              <div className="logo-name">OpenClaw</div>
+              <div className="logo-name">Bang's Trio</div>
               <div className="logo-tagline">Mission Control</div>
             </div>
           </Link>
@@ -89,9 +89,9 @@ export function LandingShell({ children }: { children: ReactNode }) {
       <footer className="landing-footer">
         <div className="footer-content">
           <div className="footer-brand">
-            <h3>OpenClaw</h3>
-            <p>A calm command center for boards, agents, and approvals.</p>
-            <div className="footer-tagline">Realtime Execution Visibility</div>
+            <h3>Bang's Trio</h3>
+            <p>방울이·이슬이·리니 협업 운영을 위한 커맨드 센터.</p>
+            <div className="footer-tagline">Realtime Family Agent Visibility</div>
           </div>
 
           <div className="footer-column">
@@ -150,7 +150,7 @@ export function LandingShell({ children }: { children: ReactNode }) {
 
         <div className="footer-bottom">
           <div className="footer-copyright">
-            © {new Date().getFullYear()} OpenClaw. All rights reserved.
+            © {new Date().getFullYear()} Bang's Trio Mission Control.
           </div>
           <div className="footer-bottom-links">
             <Link href="#capabilities">Capabilities</Link>

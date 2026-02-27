@@ -10,8 +10,8 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { GlobalLoader } from "@/components/ui/global-loader";
 
 export const metadata: Metadata = {
-  title: "OpenClaw Mission Control",
-  description: "A calm command center for every task.",
+  title: "Bangs Trio Mission Control",
+  description: "방울이·이슬이·리니 운영을 한눈에 보는 패밀리 커맨드 센터.",
 };
 
 const bodyFont = IBM_Plex_Sans({
