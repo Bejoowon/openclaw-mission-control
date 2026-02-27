@@ -1291,7 +1291,7 @@ export default function ActivityPage() {
         <>
           <SignedOut>
             <SignedOutPanel
-              message="Sign in to view the feed."
+              message="피드를 보려면 로그인해 주세요."
               forceRedirectUrl="/activity"
               signUpForceRedirectUrl="/activity"
               mode="redirect"
@@ -1308,12 +1308,11 @@ export default function ActivityPage() {
                       <div className="flex items-center gap-2">
                         <ActivityIcon className="h-5 w-5 text-slate-600" />
                         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-                          Live feed
+                          실시간 피드
                         </h1>
                       </div>
                       <p className="mt-1 text-sm text-slate-500">
-                        Realtime task, approval, agent, and board-chat activity
-                        across all boards.
+                        모든 보드의 작업/승인/에이전트/채팅 활동을 실시간으로 보여줘요.
                       </p>
                     </div>
                   </div>

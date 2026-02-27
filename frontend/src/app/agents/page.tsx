@@ -125,21 +125,21 @@ export default function AgentsPage() {
     <>
       <DashboardPageLayout
         signedOut={{
-          message: "Sign in to view agents.",
+          message: "에이전트를 보려면 로그인해 주세요.",
           forceRedirectUrl: "/agents",
           signUpForceRedirectUrl: "/agents",
         }}
-        title="Agents"
+        title="에이전트"
         description={`${agents.length} agent${agents.length === 1 ? "" : "s"} total.`}
         headerActions={
           agents.length > 0 ? (
             <Button onClick={() => router.push("/agents/new")}>
-              New agent
+              새 에이전트
             </Button>
           ) : null
         }
         isAdmin={isAdmin}
-        adminOnlyMessage="Only organization owners and admins can access agents."
+        adminOnlyMessage="조직 소유자/관리자만 에이전트 페이지에 접근할 수 있어요."
         stickyHeader
       >
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

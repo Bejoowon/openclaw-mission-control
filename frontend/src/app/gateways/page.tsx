@@ -91,11 +91,11 @@ export default function GatewaysPage() {
     <>
       <DashboardPageLayout
         signedOut={{
-          message: "Sign in to view gateways.",
+          message: "게이트웨이를 보려면 로그인해 주세요.",
           forceRedirectUrl: "/gateways",
         }}
-        title="Gateways"
-        description="Manage OpenClaw gateway connections used by boards"
+        title="게이트웨이"
+        description="보드에서 사용하는 OpenClaw 게이트웨이 연결을 관리해요"
         headerActions={
           isAdmin && gateways.length > 0 ? (
             <Link
@@ -105,12 +105,12 @@ export default function GatewaysPage() {
                 variant: "primary",
               })}
             >
-              Create gateway
+              게이트웨이 생성
             </Link>
           ) : null
         }
         isAdmin={isAdmin}
-        adminOnlyMessage="Only organization owners and admins can access gateways."
+        adminOnlyMessage="조직 소유자/관리자만 게이트웨이 페이지에 접근할 수 있어요."
         stickyHeader
       >
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

@@ -53,21 +53,21 @@ export function DashboardSidebar() {
           : "unknown";
   const statusLabel =
     systemStatus === "operational"
-      ? "All systems operational"
+      ? "시스템 정상"
       : systemStatus === "unknown"
-        ? "System status unavailable"
-        : "System degraded";
+        ? "상태 정보 없음"
+        : "일부 기능 저하";
 
   return (
     <aside className="flex h-full w-64 flex-col border-r border-slate-200 bg-white">
       <div className="flex-1 px-3 py-4">
         <p className="px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Navigation
+          메뉴
         </p>
         <nav className="mt-3 space-y-4 text-sm">
           <div>
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Overview
+              개요
             </p>
             <div className="mt-1 space-y-1">
               <Link
@@ -80,7 +80,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <BarChart3 className="h-4 w-4" />
-                Dashboard
+                대시보드
               </Link>
               <Link
                 href="/activity"
@@ -92,7 +92,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <Activity className="h-4 w-4" />
-                Live feed
+                실시간 피드
               </Link>
               <Link
                 href="/crew-chat"
@@ -111,7 +111,7 @@ export function DashboardSidebar() {
 
           <div>
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Boards
+              보드
             </p>
             <div className="mt-1 space-y-1">
               <Link
@@ -124,7 +124,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <Folder className="h-4 w-4" />
-                Board groups
+                보드 그룹
               </Link>
               <Link
                 href="/boards"
@@ -136,7 +136,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <LayoutGrid className="h-4 w-4" />
-                Boards
+                보드
               </Link>
               <Link
                 href="/tags"
@@ -148,7 +148,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <Tags className="h-4 w-4" />
-                Tags
+                태그
               </Link>
               <Link
                 href="/approvals"
@@ -160,7 +160,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <CheckCircle2 className="h-4 w-4" />
-                Approvals
+                승인
               </Link>
               {isAdmin ? (
                 <Link
@@ -173,7 +173,7 @@ export function DashboardSidebar() {
                   )}
                 >
                   <Settings className="h-4 w-4" />
-                  Custom fields
+                  커스텀 필드
                 </Link>
               ) : null}
             </div>
@@ -183,7 +183,7 @@ export function DashboardSidebar() {
             {isAdmin ? (
               <>
                 <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Skills
+                  스킬
                 </p>
                 <div className="mt-1 space-y-1">
                   <Link
@@ -197,7 +197,7 @@ export function DashboardSidebar() {
                     )}
                   >
                     <Store className="h-4 w-4" />
-                    Marketplace
+                    마켓플레이스
                   </Link>
                   <Link
                     href="/skills/packs"
@@ -209,7 +209,7 @@ export function DashboardSidebar() {
                     )}
                   >
                     <Boxes className="h-4 w-4" />
-                    Packs
+                    팩
                   </Link>
                 </div>
               </>
@@ -218,7 +218,7 @@ export function DashboardSidebar() {
 
           <div>
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-              Administration
+              관리
             </p>
             <div className="mt-1 space-y-1">
               <Link
@@ -231,7 +231,7 @@ export function DashboardSidebar() {
                 )}
               >
                 <Building2 className="h-4 w-4" />
-                Organization
+                조직
               </Link>
               {isAdmin ? (
                 <Link
@@ -244,7 +244,7 @@ export function DashboardSidebar() {
                   )}
                 >
                   <Network className="h-4 w-4" />
-                  Gateways
+                  게이트웨이
                 </Link>
               ) : null}
               {isAdmin ? (
@@ -258,7 +258,7 @@ export function DashboardSidebar() {
                   )}
                 >
                   <Bot className="h-4 w-4" />
-                  Agents
+                  에이전트
                 </Link>
               ) : null}
             </div>

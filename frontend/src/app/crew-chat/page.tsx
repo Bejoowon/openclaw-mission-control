@@ -30,6 +30,7 @@ type ChatMsg = {
 
 type RoomFilter = "all" | "group" | "direct";
 type ChatMode = "group" | "direct";
+type SyncView = "crew" | "telegram";
 
 type RoomItem = {
   key: string;
@@ -98,6 +99,8 @@ function elapsedLabel(startedAt?: string, endedAt?: string) {
 export default function CrewChatPage() {
   const [snapshot, setSnapshot] = useState<CrewSnapshot | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [syncView, setSyncView] = useState<SyncView>("crew");
+  const [telegramNotice, setTelegramNotice] = useState<string | null>(null);
   const [mode, setMode] = useState<ChatMode>("group");
   const [target, setTarget] = useState<string>("");
   const [text, setText] = useState("");
@@ -129,7 +132,7 @@ export default function CrewChatPage() {
       setLoadError(null);
       const [s, mRes] = await Promise.all([
         fetch("/api/crew-snapshot", { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/crew-chat/messages", { cache: "no-store", headers }),
+        fetch(`/api/crew-chat/messages?view=${syncView}`, { cache: "no-store", headers }),
       ]);
 
       setSnapshot(s);
@@ -146,15 +149,19 @@ export default function CrewChatPage() {
         throw new Error(payload.error || "대화 기록을 불러오지 못했어요.");
       }
 
-      const m = (await mRes.json()) as { messages?: ChatMsg[] };
+      const m = (await mRes.json()) as {
+        messages?: ChatMsg[];
+        telegram?: { available?: boolean; notice?: string };
+      };
       setMessages(m.messages ?? []);
+      setTelegramNotice(m.telegram?.available === false ? (m.telegram.notice || "텔레그램 기록을 불러오지 못했어요.") : null);
       setUnlocked(true);
       return { kind: "ok" as const };
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "대화 기록을 불러오지 못했어요.");
       return { kind: "error" as const };
     }
-  }, [pin, target]);
+  }, [pin, syncView, target]);
 
   useEffect(() => {
     // 보안 우선: 앱 재접속 시 항상 PIN 재입력
@@ -225,14 +232,17 @@ export default function CrewChatPage() {
 
   const filtered = useMemo(() => {
     if (!unlocked) return [];
+    if (syncView === "telegram") return messages;
     if (mode === "group") return messages.filter((m) => m.room === "crew");
     return messages.filter((m) => m.room === `dm:${target}`);
-  }, [messages, mode, target, unlocked]);
+  }, [messages, mode, syncView, target, unlocked]);
 
   const currentRoomTitle =
-    mode === "group"
-      ? "# 우리 크루 라운지"
-      : `${getAvatar(target)} ${snapshot?.agents.find((a) => a.id === target)?.name || target}`;
+    syncView === "telegram"
+      ? "📨 텔레그램 동기화 (읽기 전용)"
+      : mode === "group"
+        ? "# 우리 크루 라운지"
+        : `${getAvatar(target)} ${snapshot?.agents.find((a) => a.id === target)?.name || target}`;
 
   const mentionCandidates = useMemo(
     () => (snapshot?.agents ?? []).map((agent) => ({ id: agent.id, label: `@${agent.name}` })),
@@ -299,7 +309,7 @@ export default function CrewChatPage() {
 
   const send = async () => {
     const trimmed = text.trim();
-    if (!trimmed || !unlocked || (mode === "direct" && !target)) return;
+    if (!trimmed || !unlocked || syncView === "telegram" || (mode === "direct" && !target)) return;
     if (inFlightSendRef.current) return;
 
     const room = mode === "group" ? "crew" : `dm:${target}`;
@@ -536,6 +546,24 @@ export default function CrewChatPage() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-strong">{currentRoomTitle}</p>
                   <p className="text-xs text-muted">실시간 동기화 · 응답 로그 자동 반영</p>
+                  <div className="mt-2 inline-flex rounded-lg bg-[color:var(--surface-muted)] p-1">
+                    <Button
+                      size="sm"
+                      variant={syncView === "crew" ? "primary" : "ghost"}
+                      className="h-7 px-3 text-xs"
+                      onClick={() => setSyncView("crew")}
+                    >
+                      크루로그
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={syncView === "telegram" ? "primary" : "ghost"}
+                      className="h-7 px-3 text-xs"
+                      onClick={() => setSyncView("telegram")}
+                    >
+                      텔레그램 동기화
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -561,6 +589,12 @@ export default function CrewChatPage() {
                 {loadError ? (
                   <div className="rounded-xl border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 p-3 text-sm text-[color:var(--danger)]">
                     기록 동기화 중 문제가 생겼어요: {loadError}
+                  </div>
+                ) : null}
+                {syncView === "telegram" ? (
+                  <div className="rounded-xl border border-[color:var(--accent)]/40 bg-[color:var(--accent-soft)] p-3 text-xs text-muted">
+                    텔레그램 대화는 읽기 전용으로 동기화돼요. 대시보드에서 전송은 비활성화됩니다.
+                    {telegramNotice ? <p className="mt-1 text-[color:var(--warning)]">{telegramNotice}</p> : null}
                   </div>
                 ) : null}
 
@@ -627,20 +661,22 @@ export default function CrewChatPage() {
               </div>
 
               <div className="border-t border-[color:var(--border)] p-3 md:p-4">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-muted">멘션 빠른 삽입</span>
-                  {mentionCandidates.map((mention) => (
-                    <Button
-                      key={mention.id}
-                      variant="secondary"
-                      size="sm"
-                      className="h-7 rounded-full px-3 text-xs"
-                      onClick={() => addMention(mention.label)}
-                    >
-                      {mention.label}
-                    </Button>
-                  ))}
-                </div>
+                {syncView === "crew" ? (
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted">멘션 빠른 삽입</span>
+                    {mentionCandidates.map((mention) => (
+                      <Button
+                        key={mention.id}
+                        variant="secondary"
+                        size="sm"
+                        className="h-7 rounded-full px-3 text-xs"
+                        onClick={() => addMention(mention.label)}
+                      >
+                        {mention.label}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
 
                 {sendError ? (
                   <div className="mb-2 rounded-lg border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 px-2.5 py-2 text-xs text-[color:var(--danger)]">
@@ -653,13 +689,16 @@ export default function CrewChatPage() {
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     placeholder={
-                      mode === "group"
-                        ? "우리 크루에게 전할 메시지를 입력해줘"
-                        : `${snapshot?.agents.find((a) => a.id === target)?.name || target}에게 보낼 메시지를 입력해줘`
+                      syncView === "telegram"
+                        ? "텔레그램 동기화 모드는 읽기 전용이에요"
+                        : mode === "group"
+                          ? "우리 크루에게 전할 메시지를 입력해줘"
+                          : `${snapshot?.agents.find((a) => a.id === target)?.name || target}에게 보낼 메시지를 입력해줘`
                     }
                     rows={2}
                     className="min-h-[58px] resize-none"
                     enterKeyHint="send"
+                    disabled={syncView === "telegram"}
                     onCompositionStart={() => setIsComposing(true)}
                     onCompositionEnd={() => setIsComposing(false)}
                     onKeyDown={(e) => {
@@ -672,8 +711,8 @@ export default function CrewChatPage() {
                       void send();
                     }}
                   />
-                  <Button onClick={() => void send()} disabled={busy || inFlightSendRef.current || !text.trim()}>
-                    {busy ? "전송 중" : "보내기"}
+                  <Button onClick={() => void send()} disabled={syncView === "telegram" || busy || inFlightSendRef.current || !text.trim()}>
+                    {syncView === "telegram" ? "읽기 전용" : busy ? "전송 중" : "보내기"}
                   </Button>
                 </div>
               </div>

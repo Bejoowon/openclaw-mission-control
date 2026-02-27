@@ -509,10 +509,10 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="font-heading text-2xl font-semibold text-slate-900 tracking-tight">
-                  Dashboard
+                  대시보드
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Monitor your mission control operations
+                  미션 컨트롤 운영 현황을 한눈에 확인해요
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3">
@@ -612,7 +612,7 @@ export default function DashboardPage() {
 
             {metricsQuery.isLoading && !metrics ? (
               <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
-                Loading dashboard metrics…
+                대시보드 지표를 불러오는 중…
               </div>
             ) : null}
 
