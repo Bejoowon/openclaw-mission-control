@@ -55,6 +55,13 @@ const statusLabel: Record<string, string> = {
   error: "오류",
 };
 
+function getStatusVariant(status?: string): "success" | "accent" | "danger" | "default" {
+  if (status === "ok") return "success";
+  if (status === "sent") return "accent";
+  if (status === "error") return "danger";
+  return "default";
+}
+
 function getAvatar(idOrName: string) {
   return avatarById[idOrName] || "🤖";
 }
@@ -503,6 +510,9 @@ export default function CrewChatPage() {
                   <Button variant="secondary" size="sm" onClick={() => void load()}>
                     새로고침
                   </Button>
+                  <Button variant="outline" size="sm" className="lg:hidden" onClick={() => void clearSavedPin()}>
+                    PIN 잠금
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -531,7 +541,14 @@ export default function CrewChatPage() {
                       <div className={cn("max-w-[88%] md:max-w-[82%]", mine ? "order-2" : "order-1")}>
                         <div className="mb-1 flex items-center gap-1.5 text-[11px] text-muted">
                           <span className="font-medium text-strong">{m.from}</span>
-                          {badge ? <Badge className="px-1.5 py-0.5 text-[10px] normal-case tracking-normal">{badge}</Badge> : null}
+                          {badge ? (
+                            <Badge
+                              variant={getStatusVariant(m.status)}
+                              className="px-1.5 py-0.5 text-[10px] normal-case tracking-normal"
+                            >
+                              {badge}
+                            </Badge>
+                          ) : null}
                           <span>·</span>
                           <span>{formatDateTime(m.ts)}</span>
                           {elapsed ? <span className="text-[10px] text-muted">({elapsed})</span> : null}
