@@ -654,12 +654,15 @@ export default function DashboardPage() {
                       <p className="mt-1 text-sm text-slate-500">
                         agents.list 기반 자동 확장 뷰 (에이전트 추가 시 자동 반영)
                       </p>
-                      <Link
-                        href="/crew-chat"
-                        className="mt-2 inline-flex items-center rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100"
-                      >
-                        크루 채팅 바로가기
-                      </Link>
+                      <div className="mt-3 rounded-xl border border-violet-200 bg-violet-50/70 p-3">
+                        <p className="text-xs text-violet-700">아주아주 멋진 너와 나의 대화창구</p>
+                        <Link
+                          href="/crew-chat"
+                          className="mt-2 inline-flex items-center rounded-lg border border-violet-300 bg-white px-2.5 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+                        >
+                          크루 채팅 열기
+                        </Link>
+                      </div>
                     </div>
                     <div className="text-xs text-slate-500">
                       {crewSnapshot
