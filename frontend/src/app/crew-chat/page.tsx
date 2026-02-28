@@ -44,6 +44,7 @@ export default function CrewChatPage() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [showRooms, setShowRooms] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
 
   const [pin, setPin] = useState("");
   const [pinDraft, setPinDraft] = useState("");
@@ -281,10 +282,12 @@ export default function CrewChatPage() {
                 rows={2}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
                 className="min-h-[56px] flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="메시지 입력"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey && !isComposing) {
                     e.preventDefault();
                     void send();
                   }
