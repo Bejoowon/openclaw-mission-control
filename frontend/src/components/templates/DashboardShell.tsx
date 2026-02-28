@@ -95,7 +95,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           </SignedIn>
         </div>
       </header>
-      <div className="grid min-h-[calc(100vh-64px)] grid-cols-[260px_1fr] bg-slate-50">
+      <div className="grid min-h-[calc(100vh-64px)] grid-cols-1 bg-slate-50 lg:grid-cols-[260px_1fr]">
         {children}
       </div>
     </div>
