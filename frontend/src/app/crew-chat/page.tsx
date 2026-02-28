@@ -116,6 +116,8 @@ export default function CrewChatPage() {
     setBusy(true);
     const current = trimmed;
     setText("");
+    // 한글 IME 조합 이벤트가 늦게 들어와 마지막 글자가 남는 현상 방지
+    setTimeout(() => setText(""), 40);
 
     try {
       const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -287,8 +289,10 @@ export default function CrewChatPage() {
                 className="min-h-[56px] flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 placeholder="메시지 입력"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !isComposing) {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
+                    const native = e.nativeEvent as unknown as { isComposing?: boolean; keyCode?: number };
+                    if (isComposing || native?.isComposing || native?.keyCode === 229) return;
                     void send();
                   }
                 }}
