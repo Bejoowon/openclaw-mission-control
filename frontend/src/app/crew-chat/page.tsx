@@ -64,8 +64,12 @@ export default function CrewChatPage() {
         fetch("/api/crew-chat/messages", { cache: "no-store", headers }),
       ]);
 
-      setSnapshot(s);
-      if (!target && s?.agents?.[0]?.id) setTarget(s.agents[0].id);
+      const normalized = {
+        ...s,
+        agents: (s?.agents ?? []).filter((a: { id: string }) => a.id !== "main"),
+      };
+      setSnapshot(normalized);
+      if (!target && normalized?.agents?.[0]?.id) setTarget(normalized.agents[0].id);
 
       if (mRes.status === 401) {
         setUnlocked(false);
@@ -74,7 +78,10 @@ export default function CrewChatPage() {
       }
 
       const m = await mRes.json();
-      setMessages(m.messages ?? []);
+      const cleaned = (m.messages ?? []).filter(
+        (msg: ChatMsg) => !(typeof msg.text === "string" && msg.text.startsWith("Command failed: openclaw agent")),
+      );
+      setMessages(cleaned);
       setUnlocked(true);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "불러오기 실패");
