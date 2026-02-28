@@ -70,7 +70,11 @@ async function askAgent(agentId: string, message: string, room: string, requestI
       status?: string;
     };
 
-    const text = json.result?.payloads?.map((p) => p.text).filter(Boolean).join("\n\n") || "(응답 없음)";
+    const text = json.result?.payloads?.map((p) => p.text).filter(Boolean).join("\n\n") || "";
+
+    if (!text.trim()) {
+      return;
+    }
 
     await appendCrewChatLog({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
