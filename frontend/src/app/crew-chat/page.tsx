@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DashboardSidebar } from "@/components/organisms/DashboardSidebar";
+import { DashboardShell } from "@/components/templates/DashboardShell";
 
 type CrewSnapshot = {
   agents: Array<{ id: string; name: string }>;
@@ -179,25 +181,28 @@ export default function CrewChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white px-4 py-3">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold tracking-[0.2em] text-violet-500">BANG'S CREW</p>
-            <p className="text-sm font-semibold text-slate-900">크루 채팅</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowRooms((v) => !v)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs">
-              방 목록
-            </button>
-            <button onClick={() => void load()} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs">
-              새로고침
-            </button>
-          </div>
-        </div>
-      </header>
+    <DashboardShell>
+      <div className="hidden lg:block">
+        <DashboardSidebar />
+      </div>
 
-      <main className="mx-auto grid h-[calc(100vh-61px)] w-full max-w-6xl grid-cols-1 bg-white lg:grid-cols-[260px_1fr_220px]">
+      <main className="grid h-[calc(100vh-64px)] w-full grid-cols-1 bg-white lg:grid-cols-[260px_1fr_220px]">
+        <section className="border-b border-slate-200 bg-white px-4 py-3 lg:col-span-3 lg:border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold tracking-[0.2em] text-violet-500">BANG'S CREW</p>
+              <p className="text-sm font-semibold text-slate-900">크루 채팅</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowRooms((v) => !v)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs">
+                방 목록
+              </button>
+              <button onClick={() => void load()} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs">
+                새로고침
+              </button>
+            </div>
+          </div>
+        </section>
         <aside className="hidden border-r border-slate-200 bg-slate-50 lg:block">
           <div className="p-3">
             <p className="mb-2 text-xs font-semibold text-slate-500">대화방</p>
@@ -295,6 +300,6 @@ export default function CrewChatPage() {
           <div className="mt-2 rounded-lg bg-white p-3 text-sm">현재 메시지: {roomMessages.length}개</div>
         </aside>
       </main>
-    </div>
+    </DashboardShell>
   );
 }
